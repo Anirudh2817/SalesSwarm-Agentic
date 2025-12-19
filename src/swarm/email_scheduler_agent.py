@@ -204,62 +204,47 @@ class EmailSchedulerAgent:
         return tz.localize(dt)
     
     def _infer_timezone_from_location(self, location: str) -> str:
-        """Infer timezone from location string"""
-        location_lower = location.lower()
+        """
+        Dynamically infer timezone from any location string using geocoding.
         
-        # US locations
-        us_timezones = {
-            "new york": "America/New_York",
-            "ny": "America/New_York",
-            "boston": "America/New_York",
-            "miami": "America/New_York",
-            "chicago": "America/Chicago",
-            "dallas": "America/Chicago",
-            "houston": "America/Chicago",
-            "denver": "America/Denver",
-            "phoenix": "America/Phoenix",
-            "los angeles": "America/Los_Angeles",
-            "san francisco": "America/Los_Angeles",
-            "seattle": "America/Los_Angeles",
-            "california": "America/Los_Angeles",
-            "texas": "America/Chicago",
-            "austin": "America/Chicago",
-        }
+        Uses geopy to geocode the location to coordinates, then timezonefinder
+        to determine the timezone from those coordinates.
+        """
+        try:
+            from geopy.geocoders import Nominatim
+            from timezonefinder import TimezoneFinder
+            
+            # Geocode the location string to get coordinates
+            geolocator = Nominatim(user_agent="sales_swarm_scheduler")
+            loc = geolocator.geocode(location, timeout=10)
+            
+            if loc:
+                # Find timezone from coordinates
+                tf = TimezoneFinder()
+                timezone = tf.timezone_at(lng=loc.longitude, lat=loc.latitude)
+                
+                if timezone:
+                    agent_logger.log_agent_action(
+                        self.agent_id, "TIMEZONE_DETECTED",
+                        f"Location '{location}' → Coordinates ({loc.latitude}, {loc.longitude}) → {timezone}"
+                    )
+                    return timezone
+                    
+            agent_logger.log_agent_action(
+                self.agent_id, "TIMEZONE_FALLBACK",
+                f"Could not geocode location '{location}', using UTC"
+            )
+            
+        except ImportError as e:
+            agent_logger.log_error(
+                f"Missing dependency for timezone detection: {e}. Install with: pip install geopy timezonefinder",
+                self.agent_id
+            )
+        except Exception as e:
+            agent_logger.log_error(f"Timezone inference failed for '{location}': {e}", self.agent_id)
         
-        # International locations
-        intl_timezones = {
-            "london": "Europe/London",
-            "uk": "Europe/London",
-            "paris": "Europe/Paris",
-            "berlin": "Europe/Berlin",
-            "germany": "Europe/Berlin",
-            "amsterdam": "Europe/Amsterdam",
-            "mumbai": "Asia/Kolkata",
-            "india": "Asia/Kolkata",
-            "bangalore": "Asia/Kolkata",
-            "singapore": "Asia/Singapore",
-            "tokyo": "Asia/Tokyo",
-            "japan": "Asia/Tokyo",
-            "sydney": "Australia/Sydney",
-            "australia": "Australia/Sydney",
-            "toronto": "America/Toronto",
-            "canada": "America/Toronto",
-            "dubai": "Asia/Dubai",
-            "uae": "Asia/Dubai",
-        }
-        
-        # Check US locations first
-        for city, tz in us_timezones.items():
-            if city in location_lower:
-                return tz
-        
-        # Check international locations
-        for city, tz in intl_timezones.items():
-            if city in location_lower:
-                return tz
-        
-        # Default to US Eastern if unknown
-        return "America/New_York"
+        # Fallback to UTC if detection fails
+        return "UTC"
     
     def get_scheduled_emails(
         self,
