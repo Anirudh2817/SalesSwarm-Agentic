@@ -1,0 +1,34 @@
+# SalesSwarm-Agentic - Requirements
+# Python version: 3.9+
+
+# Core AI/ML dependencies
+openai>=1.40.0,<2.0.0
+python-dotenv>=1.0.0,<2.0.0
+pydantic>=2.0.0,<3.0.0
+pydantic-settings>=2.0.0,<3.0.0
+
+# YAML support for configuration
+pyyaml>=6.0.0,<7.0.0
+
+# Web framework
+fastapi>=0.115.0,<1.0.0
+uvicorn>=0.34.0,<1.0.0
+
+# Networking
+aiohttp>=3.8.0,<4.0.0
+httpx>=0.25.0,<1.0.0
+
+# Redis
+redis>=5.0.0,<7.0.0
+
+# Web scraping (for company intel)
+beautifulsoup4>=4.12.0,<5.0.0
+requests>=2.31.0,<3.0.0
+
+# LinkedIn scraping via Apify
+apify-client>=1.6.0,<3.0.0
+
+# Utilities
+typing-extensions>=4.0.0,<5.0.0
+python-multipart>=0.0.9,<1.0.0
+pytz>=2023.3,<2025.0

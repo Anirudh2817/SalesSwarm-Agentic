@@ -1,0 +1,174 @@
+# SalesSwarm-Agentic Prompt Templates
+
+# Email Generator Agent
+email_generator:
+  system_prompt: |
+    You are an expert B2B sales email copywriter. Your job is to create highly personalized, 
+    compelling cold outreach emails that get responses.
+    
+    Key principles:
+    - Keep emails short and scannable (under 150 words)
+    - Lead with value, not features
+    - Use personalization to show genuine research
+    - Include clear but soft calls-to-action
+    - Avoid spam triggers and salesy language
+    - Write in a conversational, human tone
+  
+  introduction_template: |
+    Write a cold outreach email for a sales campaign.
+    
+    CAMPAIGN GOAL: {campaign_goal}
+    
+    LEAD INFORMATION:
+    - Name: {lead_name}
+    - Title: {lead_title}
+    - Company: {lead_company}
+    - Industry: {lead_industry}
+    
+    COMPANY INSIGHTS (if available):
+    {company_insights}
+    
+    REQUIREMENTS:
+    - Subject line must be compelling and under 50 characters
+    - Email body should be {tone} and under 150 words
+    - Include ONE personalization element highlighted in the text
+    - End with a soft call-to-action (question, not demand)
+    
+    Return JSON format:
+    {{
+      "subject": "Subject line",
+      "body": "Email body with {{personalization_token}} placeholders"
+    }}
+  
+  followup_template: |
+    Write a follow-up email for a sales campaign.
+    
+    CAMPAIGN GOAL: {campaign_goal}
+    PREVIOUS EMAIL: {previous_email}
+    FOLLOW-UP NUMBER: {followup_number}
+    
+    LEAD INFORMATION:
+    - Name: {lead_name}
+    - Title: {lead_title}
+    - Company: {lead_company}
+    
+    REQUIREMENTS:
+    - Shorter than the introduction email
+    - Reference the previous email naturally
+    - Provide NEW value or angle
+    - Follow-up {followup_number} should be {'more direct' if followup_number > 1 else 'gentle reminder'}
+    
+    Return JSON format:
+    {{
+      "subject": "Subject line",
+      "body": "Email body"
+    }}
+
+# Lead Qualification Agent
+lead_qualification:
+  system_prompt: |
+    You are an expert sales lead qualification specialist. Your job is to evaluate leads 
+    against ideal customer profiles and provide actionable scoring.
+    
+    Consider these factors:
+    - Title/role match to target persona
+    - Company size and industry fit
+    - Geographic relevance
+    - Decision-making authority
+    - Pain point alignment
+  
+  scoring_template: |
+    Evaluate this lead against the qualification criteria.
+    
+    LEAD PROFILE:
+    - Name: {lead_name}
+    - Title: {lead_title}
+    - Company: {lead_company}
+    - Industry: {lead_industry}
+    - Location: {lead_location}
+    - Company Size: {company_size}
+    
+    QUALIFICATION CRITERIA:
+    - Target Titles: {target_titles}
+    - Target Industries: {target_industries}
+    - Target Locations: {target_locations}
+    - Target Company Size: {target_company_size}
+    
+    Score the lead from 0-100 and provide:
+    1. Overall score
+    2. Individual factor scores
+    3. Brief reasoning
+    4. Recommended approach
+    
+    Return JSON format:
+    {{
+      "score": 85,
+      "qualified": true,
+      "title_match_score": 90,
+      "industry_match_score": 80,
+      "location_match_score": 85,
+      "company_size_score": 85,
+      "reasoning": "Brief explanation",
+      "recommended_approach": "How to engage this lead",
+      "priority_level": "high"
+    }}
+
+# Lookalike Finder Agent
+lookalike_finder:
+  system_prompt: |
+    You are an expert at identifying ideal customer profiles (ICP) and finding 
+    similar prospects. Analyze provided profiles to extract common traits.
+  
+  icp_analysis_template: |
+    Analyze these ideal customer profiles and extract the common traits.
+    
+    PROFILES:
+    {profiles}
+    
+    Extract and return:
+    1. Common job titles/roles
+    2. Common industries
+    3. Common company sizes
+    4. Common locations/regions
+    5. Key patterns in their backgrounds
+    
+    Return JSON format:
+    {{
+      "icp_summary": "Description of ideal customer",
+      "common_titles": ["title1", "title2"],
+      "common_industries": ["industry1", "industry2"],
+      "common_company_sizes": ["11-50", "51-200"],
+      "common_locations": ["location1", "location2"],
+      "key_patterns": ["pattern1", "pattern2"]
+    }}
+
+# Company Intelligence Agent
+company_intel:
+  system_prompt: |
+    You are an expert business analyst. Analyze company information to extract 
+    actionable insights for sales outreach.
+  
+  analysis_template: |
+    Analyze this company information and extract sales-relevant insights.
+    
+    COMPANY: {company_name}
+    WEBSITE CONTENT:
+    {website_content}
+    
+    Extract:
+    1. What the company does (products/services)
+    2. Their industry and target market
+    3. Recent news or developments (if visible)
+    4. Potential challenges they might face
+    5. How our solution could help them
+    
+    Return JSON format:
+    {{
+      "industry": "Industry name",
+      "description": "What they do",
+      "products_services": ["product1", "product2"],
+      "target_market": "Who they serve",
+      "challenges": ["challenge1", "challenge2"],
+      "opportunities": ["opportunity1", "opportunity2"],
+      "talking_points": ["point1", "point2"]
+    }}
