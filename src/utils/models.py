@@ -36,6 +36,8 @@ class LeadProfile(BaseModel):
     """Lead/prospect profile data"""
     id: Optional[str] = None
     name: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
     title: Optional[str] = None
@@ -50,6 +52,8 @@ class LeadProfile(BaseModel):
     # Enriched data
     headline: Optional[str] = None
     summary: Optional[str] = None
+    seniority: Optional[str] = None  # e.g., "director", "vp", "c_suite"
+    departments: Optional[List[str]] = None  # e.g., ["sales", "marketing"]
     experience: Optional[List[Dict[str, Any]]] = None
     skills: Optional[List[str]] = None
     

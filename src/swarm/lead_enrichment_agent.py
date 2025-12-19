@@ -1,8 +1,8 @@
 """
-Lead Enrichment Agent - Extracts data from LinkedIn profiles
+Lead Enrichment Agent - Extracts data from LinkedIn profiles using Apollo.io
 """
 import json
-import os
+import httpx
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -11,44 +11,38 @@ from ..utils.config import get_config
 from ..utils.logger import agent_logger
 from ..utils.models import LeadProfile, LeadEnrichmentRequest, LeadEnrichmentResponse, LeadStatus
 
-# Try to import Apify client
-try:
-    from apify_client import ApifyClient
-    APIFY_AVAILABLE = True
-except ImportError:
-    APIFY_AVAILABLE = False
-
 
 class LeadEnrichmentAgent:
     """
-    Enriches lead data by scraping LinkedIn profiles.
-    Uses Apify for compliant LinkedIn scraping.
+    Enriches lead data from LinkedIn profiles.
+    Uses Apollo.io People Enrichment API for comprehensive lead data.
     """
+    
+    APOLLO_API_BASE = "https://api.apollo.io/v1"
     
     def __init__(self):
         self.agent_id = "lead_enrichment"
         self.config = get_config()
         self.knowledge_store = get_knowledge_store()
         
-        # Apify client for LinkedIn scraping
-        self.apify_client = None
-        if APIFY_AVAILABLE and self.config.apify_api_key:
-            self.apify_client = ApifyClient(self.config.apify_api_key)
-            agent_logger.log_system_info("APIFY_CONNECTED", "Apify client initialized")
+        # Apollo API key
+        self.apollo_api_key = self.config.apollo_api_key
+        if self.apollo_api_key:
+            agent_logger.log_system_info("APOLLO_CONFIGURED", "Apollo.io API key found")
         else:
-            agent_logger.log_warning("Apify not available - will use mock data", self.agent_id)
+            agent_logger.log_warning("Apollo API key not found - will use mock data", self.agent_id)
         
         # Register with knowledge store
         self._register()
         
-        agent_logger.log_system_info("AGENT_INIT", "Lead Enrichment Agent initialized")
+        agent_logger.log_system_info("AGENT_INIT", "Lead Enrichment Agent initialized (Apollo.io)")
     
     def _register(self):
         """Register agent with knowledge store"""
         capability = AgentCapability(
             agent_id=self.agent_id,
             name="Lead Enrichment",
-            description="Enriches lead data from LinkedIn profiles",
+            description="Enriches lead data from LinkedIn profiles using Apollo.io",
             triggers=[EventType.LEAD_ENRICHMENT_REQUESTED],
             outputs=[EventType.LEAD_ENRICHED]
         )
@@ -84,7 +78,7 @@ class LeadEnrichmentAgent:
     
     async def enrich_leads(self, linkedin_urls: List[str]) -> LeadEnrichmentResponse:
         """
-        Enrich leads from LinkedIn URLs.
+        Enrich leads from LinkedIn URLs using Apollo.io.
         
         Args:
             linkedin_urls: List of LinkedIn profile URLs
@@ -92,15 +86,15 @@ class LeadEnrichmentAgent:
         Returns:
             LeadEnrichmentResponse with enriched lead profiles
         """
-        agent_logger.log_agent_action(self.agent_id, "ENRICH_LEADS", f"Processing {len(linkedin_urls)} URLs")
+        agent_logger.log_agent_action(self.agent_id, "ENRICH_LEADS", f"Processing {len(linkedin_urls)} URLs via Apollo")
         
         leads = []
         errors = []
         
         for url in linkedin_urls:
             try:
-                if self.apify_client:
-                    lead = await self._scrape_with_apify(url)
+                if self.apollo_api_key:
+                    lead = await self._enrich_with_apollo(url)
                 else:
                     lead = self._create_mock_lead(url)
                 
@@ -118,46 +112,125 @@ class LeadEnrichmentAgent:
             errors=errors if errors else None
         )
     
-    async def _scrape_with_apify(self, linkedin_url: str) -> Optional[LeadProfile]:
-        """Scrape LinkedIn profile using Apify"""
+    async def _enrich_with_apollo(self, linkedin_url: str) -> Optional[LeadProfile]:
+        """Enrich lead using Apollo.io People Enrichment API"""
         try:
-            # LinkedIn Profile Scraper actor
-            run_input = {
-                "profileUrls": [linkedin_url],
-                "proxyConfiguration": {"useApifyProxy": True}
-            }
-            
-            # Run the actor
-            run = self.apify_client.actor("2SyF0bVxmgGr8IVCZ").call(run_input=run_input)
-            
-            # Get results
-            items = list(self.apify_client.dataset(run["defaultDatasetId"]).iterate_items())
-            
-            if items:
-                item = items[0]
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Apollo People Enrichment endpoint
+                response = await client.post(
+                    f"{self.APOLLO_API_BASE}/people/match",
+                    headers={
+                        "Content-Type": "application/json",
+                        "Cache-Control": "no-cache"
+                    },
+                    json={
+                        "api_key": self.apollo_api_key,
+                        "linkedin_url": linkedin_url
+                    }
+                )
+                
+                if response.status_code != 200:
+                    agent_logger.log_error(
+                        f"Apollo API error: {response.status_code} - {response.text}",
+                        self.agent_id
+                    )
+                    return self._create_mock_lead(linkedin_url)
+                
+                data = response.json()
+                person = data.get("person", {})
+                
+                if not person:
+                    agent_logger.log_warning(f"No data found for {linkedin_url}", self.agent_id)
+                    return self._create_mock_lead(linkedin_url)
+                
+                # Extract organization info
+                org = person.get("organization", {}) or {}
+                employment = person.get("employment_history", [])
+                current_job = employment[0] if employment else {}
+                
                 return LeadProfile(
-                    name=item.get("name", "Unknown"),
-                    email=item.get("email"),
-                    phone=item.get("phone"),
-                    title=item.get("headline", "").split(" at ")[0] if " at " in item.get("headline", "") else item.get("headline"),
-                    company=item.get("company") or (item.get("headline", "").split(" at ")[1] if " at " in item.get("headline", "") else None),
+                    id=person.get("id"),
+                    name=f"{person.get('first_name', '')} {person.get('last_name', '')}".strip() or "Unknown",
+                    first_name=person.get("first_name"),
+                    last_name=person.get("last_name"),
+                    email=person.get("email"),
+                    phone=person.get("phone_numbers", [{}])[0].get("sanitized_number") if person.get("phone_numbers") else None,
+                    title=person.get("title"),
+                    company=org.get("name") or person.get("organization_name"),
+                    company_url=org.get("website_url"),
                     linkedin_url=linkedin_url,
-                    location=item.get("location"),
-                    industry=item.get("industry"),
-                    headline=item.get("headline"),
-                    summary=item.get("summary"),
-                    skills=item.get("skills", []),
+                    location=f"{person.get('city', '')}, {person.get('state', '')}, {person.get('country', '')}".strip(", "),
+                    industry=org.get("industry"),
+                    company_size=org.get("estimated_num_employees"),
+                    headline=person.get("headline"),
+                    summary=person.get("summary"),
+                    seniority=person.get("seniority"),
+                    departments=person.get("departments", []),
                     status=LeadStatus.ENRICHED,
                     enriched_at=datetime.now(),
-                    source="linkedin_apify"
+                    source="apollo"
                 )
-            
-            return None
-            
-        except Exception as e:
-            agent_logger.log_error(f"Apify scraping error: {e}", self.agent_id)
-            # Fallback to mock data
+                
+        except httpx.TimeoutException:
+            agent_logger.log_error(f"Apollo API timeout for {linkedin_url}", self.agent_id)
             return self._create_mock_lead(linkedin_url)
+        except Exception as e:
+            agent_logger.log_error(f"Apollo enrichment error: {e}", self.agent_id)
+            return self._create_mock_lead(linkedin_url)
+    
+    async def enrich_by_email(self, email: str) -> Optional[LeadProfile]:
+        """Enrich lead by email address using Apollo.io"""
+        if not self.apollo_api_key:
+            agent_logger.log_warning("Apollo API key not configured", self.agent_id)
+            return None
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.APOLLO_API_BASE}/people/match",
+                    headers={
+                        "Content-Type": "application/json",
+                        "Cache-Control": "no-cache"
+                    },
+                    json={
+                        "api_key": self.apollo_api_key,
+                        "email": email
+                    }
+                )
+                
+                if response.status_code != 200:
+                    return None
+                
+                data = response.json()
+                person = data.get("person", {})
+                
+                if not person:
+                    return None
+                
+                org = person.get("organization", {}) or {}
+                
+                return LeadProfile(
+                    id=person.get("id"),
+                    name=f"{person.get('first_name', '')} {person.get('last_name', '')}".strip() or "Unknown",
+                    first_name=person.get("first_name"),
+                    last_name=person.get("last_name"),
+                    email=email,
+                    phone=person.get("phone_numbers", [{}])[0].get("sanitized_number") if person.get("phone_numbers") else None,
+                    title=person.get("title"),
+                    company=org.get("name"),
+                    company_url=org.get("website_url"),
+                    linkedin_url=person.get("linkedin_url"),
+                    location=f"{person.get('city', '')}, {person.get('state', '')}".strip(", "),
+                    industry=org.get("industry"),
+                    seniority=person.get("seniority"),
+                    status=LeadStatus.ENRICHED,
+                    enriched_at=datetime.now(),
+                    source="apollo"
+                )
+                
+        except Exception as e:
+            agent_logger.log_error(f"Apollo email enrichment error: {e}", self.agent_id)
+            return None
     
     def _create_mock_lead(self, linkedin_url: str) -> LeadProfile:
         """Create mock lead data for development/testing"""
@@ -187,6 +260,8 @@ class LeadEnrichmentAgent:
         return LeadProfile(
             id=f"mock_{url_hash[:12]}",
             name=f"{first_name} {last_name}",
+            first_name=first_name,
+            last_name=last_name,
             email=f"{first_name.lower()}.{last_name.lower()}@{company.lower().replace(' ', '')}.com",
             title=title,
             company=company,
@@ -196,7 +271,7 @@ class LeadEnrichmentAgent:
             company_size="51-200",
             headline=f"{title} at {company}",
             summary=f"Experienced {title} with a track record of driving growth and innovation.",
-            skills=["Leadership", "Strategy", "Sales", "Marketing", "Business Development"],
+            seniority="director",
             status=LeadStatus.ENRICHED,
             enriched_at=datetime.now(),
             source="mock_data"

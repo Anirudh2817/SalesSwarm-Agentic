@@ -60,10 +60,10 @@ class Config:
     def backend_api_url(self) -> str:
         return os.getenv('BACKEND_API_URL', 'http://localhost:5000')
     
-    # Apify Configuration
+    # Apollo.io Configuration
     @property
-    def apify_api_key(self) -> str:
-        return os.getenv('APIFY_API_KEY', '')
+    def apollo_api_key(self) -> str:
+        return os.getenv('APOLLO_API_KEY', '')
     
     # Server Configuration
     @property
